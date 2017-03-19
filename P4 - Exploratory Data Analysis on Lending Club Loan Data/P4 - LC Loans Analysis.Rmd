@@ -1,0 +1,769 @@
+
+Lending Club Loan Data by Malik Malik
+========================================================
+
+
+# Data Investigation and Wrangling
+
+Let's take a look at the Lending Club dataset from Kaggle, which includes all Lending Club loans from 2007 to 2015. 
+
+The Lending Club loan data can be found [here](https://www.kaggle.com/wendykan/lending-club-loan-data).
+
+The question we want to answer is: Are there certain factors that affect chances of defaulting?
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+library(ggplot2)
+library(corrplot)
+library(gridExtra)
+library(dplyr)
+library(scales)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+# Load data from CSV
+loans <- read.csv('loan.csv')
+
+```
+
+First, let's take a look at the dimensions of the dataset.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+# Print out the dimensions
+dim(loans)
+
+```
+
+This is clearly a very large dataset, with 887,379 rows and 74 variables. I wonder if we could trim this dataset down?
+
+Let's look at the 74 variables.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+colnames(loans)
+
+```
+
+Alright, so we have a variable named called loan_status. This should tell us the status of each loan. Let's see how many of each loan status type there are, and if we can possibly cut down this large dataset based on what we see here.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+table(loans$loan_status)
+```
+
+After taking a look at Lending Club's definitions for these loan statuses, we can break down the loans in this dataset to three groups:
+
+- Loans that are no longer being paid for:
+  - Fully Paid: A loan has been fully repaid
+  - Default: A loan that is 121+ days past due
+  - Charged Off: A loan that is 150+ days past due and there is no reasonable expectation of further payments
+
+- Loans that are still expected to be paid for:
+  - Current: A loan is up to date on all outstanding payments
+  - In Grace Period: Loan is past due but within the 15-day grace period
+  - Late (16-30 days): Loan is 16-30 days past due
+  - Late (31-120 days): Loan is 31-120 days past due
+  
+- Loans that did not meet the credit policy:
+  - Does not meet the credit policy. Status: Fully Paid
+  - Does not meet the credit policy. Status:Charged Off
+  
+For my analysis, I'm hoping to get a better understanding of what factors indicate a loan is more likely to default than others. As a result, I will only look at past loans. 
+
+Present loans are still in the process of payment, and I feel will not help me reach the most accurate conclusions. I also feel loans that don't meet credit policy won't benefit my analysis.
+
+Let's subset the data so it only includes past loans, and then look at the dimensions.
+  
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+# Filtering the dataset to only include the desired loans
+loans.2 <- filter(loans, loan_status == "Fully Paid"| loan_status == "Default" | loan_status == "Charged Off")
+
+# Print out table of loan_statuses
+table(loans.2$loan_status)
+
+# Factor the loan_status column
+loans.2$loan_status <- factor(loans.2$loan_status)
+
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Print out dimensions
+dim(loans.2)
+```
+
+We can see here that we've successfully filtered the dataset to only include Fully Paid, Default, and Charged Off loans. The dataset has dropped from 887,379 rows to 254,190. We still have too many variables, though. 
+
+After looking at the variable dictionary that came alongside this dataset from Kaggle, I've decided to ignore all but 13 variables of the dataset.
+These 11 variables are the only ones I feel are required if I wish to engage in insightful analysis of this dataset.
+
+The following are those 13 variables and their definitions:
+
+- addr_state: The state provided by the borrower in the loan application
+- annual_inc: Borrower's annual income.
+- dti (Debt to Income Ratio): A ratio calculated using the borrower's total monthly debt payments on the total debt obligations, excluding mortgage and the requested LC loan, divided by the borrower's self-reported monthly income.
+- emp_length: Employment length in years. 0 = less than a year.
+- grade: LC assigned loan grade
+- home_ownership: The home ownership status.
+- installment: The monthly payment owed by the borrower if the loan originates.
+- int_rate: Interest Rate on the loan.
+- issue_d (Issue Date): The month which the loan was funded
+- loan_amnt: The listed amount of the loan applied for by the borrower.
+- loan_status: Current status of the loan
+- purpose: A category provided by the borrower for the loan request.
+- term: The number of payments on the loan. Values are in months and can be either 36 or 60.
+
+Let's subset the dataset to only have those variables, and then look at the dimensions again.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+# Subset dataset to have only the aforementioned variables
+loans.2 <- subset(loans.2, select = c(addr_state, annual_inc, dti, emp_length, grade, home_ownership, installment, int_rate, issue_d, loan_amnt,loan_status, purpose, term))
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Print out the dimensions
+dim(loans.2)
+```
+
+We've now trimmed down the dataset to 13 variables.
+
+One more thing. Before starting our analysis via plot generation, let's create a column, titled default_status, that will break down the past loans into two categories depending on their loan status:
+
+- Default: Loans labeled as "default" or "charged off".
+
+- Paid: Loans that were labeled as "Fully Paid".
+
+By separating our loans this way, we'll be able to use plotting and other tools to see what variables are correlated with loans that go unpaid. Let's do that, and then look at the new dimensions.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+# Group of paid loan statuses
+default_group <- c("Default", "Charged Off")
+
+# Creating the new variable
+loans.2$default_status <- ifelse(loans.2$loan_status %in% default_group, "Default", "Paid")
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Print out the dimensions
+dim(loans.2)
+```
+
+We now have 14 variables, but take a quick look at our data to make sure this worked correctly.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+head(loans.2)
+
+```
+
+Okay, and let's see how many "Paid" and "Default" loans there are:
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+table(loans.2$default_status)
+
+```
+
+Let's take a look at our structure and summary before starting some exploratory univariate analysis
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+# Print out structure of the dataframe
+str(loans.2)
+
+# Print out a summary of the data
+summary(loans.2)
+
+```
+
+
+# Univariate Plots
+
+Let's begin our analysis by generating bar plots and histograms for our various variables.
+
+## Bar plots of categorical values
+
+### Grades
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(aes(x=grade), data = loans.2) +
+  geom_bar()
+summary(loans.2$grade)
+```
+
+This positively skewed distribution has most of its data from grades A to D.
+
+
+### Paid Status
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(aes(x=default_status), data = loans.2) +
+  geom_bar()
+
+table(loans.2$default_status)
+```
+
+There are 207,723 loans that have been paid off, while 46,467 have either defaulted or been charged off.
+
+### Employee Length 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+emp_length_factors <- c("n/a", "< 1 year", "1 year", "2 years", "3 years", "4 years", "5 years", "6 years", "7 years", "8 years", "9 years", "10+ years")
+
+loans.2$emp_length <- factor(loans.2$emp_length, levels = emp_length_factors)
+
+ggplot(aes(x=emp_length), data = loans.2) +
+  geom_bar()
+
+summary(loans.2$emp_length)
+```
+
+Borrowers who have been employed for 10+ years are by far the most common. The rest are similar in occurrence. Also, it should be noted that "n/a" in this case likely means the borrower had no employment history at the time of applying for the loan.
+
+### Purpose for loan
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(aes(x=purpose), data = loans.2) +
+  geom_bar() +
+  coord_flip()
+
+table(loans.2$purpose)
+```
+
+Debt Consolidation and Credit Card are the two biggest reasons for applying for Lending Club loans.
+
+### Terms
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(aes(x=term), data = loans.2) +
+  geom_bar()
+  
+
+summary(loans.2$term)
+```
+
+There are a lot more 36 month term loans than 60 months.
+
+### Home Ownership
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+home_ownership_counts <- as.data.frame(sort(table(loans.2$home_ownership)))
+
+names(home_ownership_counts) <- c("home_ownership", "Count")
+
+ggplot(aes(x=home_ownership, y = Count), data = tail(home_ownership_counts)) +
+  geom_bar(stat='identity') +
+  coord_flip()
+
+summary(loans.2$home_ownership)
+```
+
+Most borrowers either have a mortgage or rent, with a smaller amount of borrowers being home owners. "Other", "None", and "Any" are very few in comparison to the other three home ownership types.
+
+## Histograms of Continuous Variables
+
+### Loan Amount
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(aes(x=loan_amnt), data = loans.2) +
+  geom_histogram(aes(color=I('black'), fill = I('#099DD9'))) +
+  scale_x_continuous(breaks=seq(0, 35000, 5000))
+
+summary(loans.2$loan_amnt)
+```
+
+This right-tailed distribution shows that 75% of loan amounts are below 18,250, despite the max loan amount permitted by Lending Club being 35,000.
+
+### Annual Income
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(aes(x=annual_inc), data = loans.2) +
+  geom_histogram() +
+  geom_histogram(aes(color=I('black'), fill = I('#099DD9'))) +
+  scale_x_continuous(limit = c(0, quantile(loans.2$annual_inc, probs = 0.99)))
+
+summary(loans.2$annual_inc)
+```
+
+Considering that distribution of income in the US is positively skewed, it's not a surprise to see the same applies to a dataset of Lending Club borrowers. The median is 62,000, and 75% makes 87,000 or less.
+
+### Debt-to-Income Ratio
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(aes(x=dti), data = loans.2) +
+  geom_histogram(aes(color=I('black'), fill = I('#099DD9')))
+  scale_x_continuous(limit = c(0, quantile(loans.2$dti, probs = 0.99)))
+
+summary(loans.2$dti)
+```
+
+Removing outliers beyond the 99th percentile, we have a normal distribution, with a median debt-to-income ratio of 16.22.
+
+### Loan Installment
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(aes(x=installment), data = loans.2) +
+  geom_histogram(aes(color=I('black'), fill = I('#099DD9'))) +
+  scale_x_continuous(breaks=seq(0, 1425, 100))
+
+summary(loans.2$installment)
+```
+
+Loan installments are positively skewed, with a median of $365.20
+
+# Interest rates
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(aes(x=int_rate), data = loans.2) +
+  geom_histogram(aes(color=I('black'), fill = I('#099DD9'))) +
+  scale_x_continuous(breaks=seq(0, 2899, 2))
+
+summary(loans.2$int_rate)
+
+```
+
+The interest rate has a median value of 13.53, and a 16.55% is the 75th percentile. This is evident in the histogram, as there more values on the left/left-center of the distribution. 
+
+# Univariate Analysis
+
+### What is the structure of your dataset?
+The initial dataset contains 887,379 observations of 74 variables. There is a mix of continuous and categorical variables in the dataset. Since the dataset is quite large, I trimmed it. I cut it down to only have past loans (loans with loan statuses of "Default", "Paid Off", and "Charged Off") and 13 variables. The variables are: addr_state, annual_inc, dti, emp_length, grade, home_ownership, installment, int_rate, issue_d, loan_amnt, loan_status, purpose, term.
+
+### What is/are the main feature(s) of interest in your dataset?
+The main feature of interest is the loan_status column, as that serves as the basis for the variable I create, default_status. I'm hoping to see what factors appear related to the default rate.
+
+### What other features in the dataset do you think will help support your investigation into your feature(s) of interest?
+I believe the grades variable will be of benefit, as such a variable essentially says what Lending Club thinks the loan's chances of defaulting are e.g. Is it a safe bet or risky?
+
+### Did you create any new variables from existing variables in the dataset?
+Yes, I made a 14th variable called default_status. After trimming the dataset down to only include past loans, I made a variable that indicated whether or not a loan was paid off or were defaulted. If the loan's status was "Charged Off" or "Default", it would be given the label "Default". If it had the status "Paid Off", it would be placed in the "Paid" category.
+
+### Of the features you investigated, were there any unusual distributions? Did you perform any operations on the data to tidy, adjust, or change the form of the data? If so, why did you do this?
+
+Many graphs were positively skewed, like annual income, installment, and loan amount. The distributions for dti and annual_inc were initially problematic as they were heavily affected by a few outliers, so I set an x limit at the 99th percentile for both of them. Dti was shown to have a normal distribution after the outliers were removed. 
+
+I also factored the employee length variable in the process of trying to create it's bar chart, as the initial order of years shown in the chart wasn't in appropriate numerical order ('1o+ years' came immediately after '1 year' )
+
+# Bivariate Plots
+
+For the sake of a correlation plot, I'm going to make a variable called "default_status_int" that will have two values:
+
+0 - If the loan has "Default" for default_status
+
+1 - If the loan has "Paid" for default_status
+
+Once I do this, I'll make a correlation plot. I'll be able to get a numerical value for correlations with default_status this way.
+
+### Correlation Plot
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+# Making the variable
+
+loans.2$default_status_int <- ifelse(loans.2$default_status == "Paid", 1, 0)
+
+# Making the corr plot
+
+M <- cor(loans.2[,c("annual_inc","dti","installment", "int_rate", "loan_amnt",
+        "default_status_int")]) # get correlations
+
+# Plot matrix
+
+corrplot(M, method = c('color')) 
+
+# Output correlation figures
+
+as.data.frame(M)
+
+```
+
+Observations:
+
+  - There are no strong correlations with default status, but interest rate (-0.241) and dti (-0.114) have the highest correlation relative to the rest of the variables.
+  - Annual income appears to have minor correlations with installment (0.330) and loan_amount (0.334)
+  - Loan amount, unsurprisingly, has a near perfect linear correlation with installment (0.955). The bigger your loan amount, the more you're paying on a monthly basis.
+
+### Interest rate broken down by paid_status
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+# KDE Plot
+a1 <- ggplot(loans.2, aes(int_rate, fill = default_status)) + geom_density()
+
+# Box plot
+a2 <- ggplot(loans.2, aes(x = default_status, y = int_rate, fill = default_status)) + geom_boxplot()
+
+grid.arrange(a1, a2, ncol = 1)
+
+```
+
+Interest rates are higher for borrowers who have defaulted on their loans.
+
+### Loan amount broken down by default_status
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+# KDE Plot
+a1 <- ggplot(loans.2, aes(loan_amnt, fill = default_status)) + geom_density()
+
+# Box plot
+
+a2 <- ggplot(loans.2, aes(x = default_status, y = loan_amnt, fill = default_status)) + geom_boxplot()
+
+grid.arrange(a1, a2, ncol = 1)
+```
+
+Loan amounts for borrowers who default on their loans tend to be slightly higher than borrowers who fully pay back their loans.
+
+### Annual income broken down by default_status
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+# KDE Plots
+a1 <- ggplot(loans.2, aes(annual_inc, fill = default_status)) + geom_density() +
+  scale_x_continuous(limit = c(0, quantile(loans.2$annual_inc, probs = 0.99)))
+
+#Box plot
+a2 <- ggplot(loans.2, aes(x = default_status, y = annual_inc, fill = default_status)) + geom_boxplot() +
+  scale_y_continuous(limit = c(0, quantile(loans.2$annual_inc, probs = 0.99)))
+
+grid.arrange(a1, a2, ncol = 1)
+```
+
+The mean annual income of borrowers who default is slightly lower than borrowers who pay back their loans.
+
+### Installment broken down by default_status
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+
+# KDE Plots
+a1 <- ggplot(loans.2, aes(installment, fill = default_status)) + geom_density()
+
+# Box plot
+a2 <- ggplot(loans.2, aes(x = default_status, y = installment, fill = default_status)) + geom_boxplot()
+
+grid.arrange(a1, a2, ncol = 1)
+```
+
+Consistent with what we saw with loan amounts, borrowers who default have slightly higher installments than borrowers who don't default.
+
+### Debt-to-income ratio broken down by default_status
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+# KDE Plots
+a1 <- ggplot(loans.2, aes(dti, fill = default_status)) + geom_density()
+
+# Box plot
+a2 <- ggplot(loans.2, aes(x = default_status, y = dti, fill = default_status)) + geom_boxplot()
+
+grid.arrange(a1, a2, ncol = 1)
+```
+
+Debt-to-income ratio is higher for borrowers who default on their loans.
+
+### Default Status broken down by home_ownership
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(loans.2, aes(x = default_status, fill = home_ownership)) +
+  geom_bar(position="fill") +
+  scale_y_continuous(labels=percent)
+
+```
+
+Home ownership split seems to be rather similar, but there are slightly more renters in the Default set of borrowers.
+
+### Default status broken down by loan terms
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(loans.2, aes(x = default_status, fill = term)) +
+  geom_bar(position="fill") +
+  scale_y_continuous(labels=percent)
+
+
+```
+
+There is an increase in 60 month terms in the Default category of loans.
+
+### Default Status broken down by grade
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(loans.2, aes(x = default_status, fill = grade)) +
+  geom_bar(position="fill") +
+  scale_y_continuous(labels=percent)
+
+```
+
+Here we can see that C, D, E, and F grades make up a higher proportion of the defaulted loans than they do for loans that were paid off.
+
+### Default Status broken down by proportion of employment length
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+a1 <- ggplot(subset(loans.2, loans.2$default_status == 'Paid'), aes(x = factor(emp_length))) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "#FF6666") +
+  scale_y_continuous(labels = percent) +
+  labs(y = "Emp_length %", x = "Employment Length") +
+  ggtitle("Paid") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+a2 <- ggplot(subset(loans.2, loans.2$default_status == 'Default'), aes(x = factor(emp_length))) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "#0000ff") +
+  scale_y_continuous(labels = percent) +
+  labs(y = "Emp_length %", x = "Employment Length") +
+  ggtitle("Default") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+grid.arrange(a1, a2, ncol = 1)
+    
+```
+
+Employment length split seems to be the same for both default and paid loans.
+
+
+### Default Status broken down by proportion of purpose
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+
+a1 <- ggplot(subset(loans.2, loans.2$default_status == 'Paid'), aes(x = factor(purpose))) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "#FF6666") +
+  scale_y_continuous(labels = percent) +
+  coord_flip() +
+  labs(y = "Purpose %", x = "Purpose") +
+  ggtitle("Paid") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+a2 <- ggplot(subset(loans.2, loans.2$default_status == 'Default'), aes(x = factor(purpose))) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "#0000ff") +
+  scale_y_continuous(labels = percent) +
+  coord_flip() +
+  labs(y = "Purpose %", x = "Purpose") +
+  ggtitle("Default") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+grid.arrange(a1, a2, ncol = 1)
+    
+```
+
+The distribution of the purpose variable is pretty similar, but we can see that loans that defaulted have slightly more borrowers looking to consolidate their debt.
+
+
+# Bivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the investigation. How did the feature(s) of interest vary with other features in the dataset?
+Interest rate saw the most significant rise when comparing default loans vs paid loans. Debt-to-income ratio experiences a jump as well, but perhaps not to the extent of interest rate. Annual income appears to have a minor drop for default loans, while loan installment and loan amount experience a minor increase for default loans as well.
+
+### Did you observe any interesting relationships between the other features (not the main feature(s) of interest)?
+The corr plot indicated that there is a minor positive correlation between installment and annual income, at 0.22 Pearson's R. Installment and interest rate also have a positive correlation of 0.22.
+
+### What was the strongest relationship you found?
+Between two continuous variables, the strongest relationship I found was between installment and annual income.
+Between categorical and continuous variables, interest rate and default_status was the strongest.
+Lastly, between two categorical variables, it appears that grades shift heavily from the top grades to the worst grades between paid loans and default loans.
+
+# Multivariate Plots
+
+### Annual income and installment relationship broken down by default status
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(aes(x=annual_inc,y=installment), data= loans.2) +
+  geom_point(alpha=0.5) +
+  facet_wrap(~ default_status) +
+  scale_x_continuous(limit = c(0, quantile(loans.2$annual_inc, probs = 0.99)))
+
+```
+
+There doesn't appear to be any meaningful differences. There's a slight positive relationship between annual income and installment, but no new significant information appears when we compare loans that defaulted and loans that were paid for.
+
+### Installment and interest rate relationship, broken down by default status
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(aes(x=int_rate,y=installment), data= loans.2) +
+  geom_point(alpha=0.5) +
+  facet_wrap(~ default_status)
+
+```
+
+There doesn't appear to be anything meaningful here when we break down the relationship between int_rate and installment (which already doesn't have any serious correlation) broken down by default status.
+
+### Proportion of grades for each home ownership type, broken down by default status
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(loans.2, aes(x = home_ownership, fill = grade)) +
+  geom_bar(position="fill") +
+  facet_wrap(~ default_status) +
+  scale_y_continuous(labels=percent) +
+  coord_flip()
+
+```
+
+The relationship between grades and home ownership type is consistent among default status.
+
+### Proportion of grades for each length of employment, broken down by default status
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(loans.2, aes(x = emp_length, fill = grade)) +
+  geom_bar(position="fill") +
+  facet_wrap(~ default_status) +
+  scale_y_continuous(labels=percent) +
+  coord_flip()
+
+```
+
+There isn't any new significant information here. It looks like the proportion of grades by year is pretty consistent throughout the years, and breaking them down to default and paid loans doesn't change much.
+
+### Proportion of grades for each term, broken down by default status
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(loans.2, aes(x = term, fill = grade)) +
+  geom_bar(position="fill") +
+  scale_y_continuous(labels=percent) +
+  facet_wrap(~ default_status)
+
+```
+
+For both default and paid loans, 60 month loans see less  higher grades like A and B, and increase in E/F/G loans, when compared to 36 month loans.
+We can see that the smallest chunk of A grades appears in the 60 month loans column for the Default loans. The biggest chunk of G grades appear in the same column. 
+
+
+### Proportion of grades for each purpose, broken down by default status
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(loans.2, aes(x = purpose, fill = grade)) +
+  geom_bar(position="fill") +
+  facet_wrap(~ default_status) +
+  scale_y_continuous(labels=percent) +
+  coord_flip()
+```
+
+It should be prefaced that it is difficult to confidently make claims here as there are far more data points for borrowers hoping to consolidate loans or pay off credit card debt than any other category. The "renewable_energy" purpose in the Default column has the biggest proportion of loans with G grades. Loans taken out for car purchases in the "Paid" column has the biggest proportion of A grades.
+
+# Multivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the investigation. Were there features that strengthened each other in terms of looking at your feature(s) of interest?
+
+When looking at the relationship between interest rate & installment, and installment and annual income, there didn't appear to be anything significant to take note of when using default status as a filter. 
+
+For the other two graphs, when looking at the breakdowns of grades for each default status, across all home ownership types or length of employment, there too appeared to be very little of note. 
+
+### Were there any interesting or surprising interactions between features?
+It's not surprising, but it's worth nothing that the 60 month terms among defaulted loans had a considerable amount of grade G loans.
+
+The only surprising observation was that defaulted loans under the renewable energy purpose saw a significant increase in grade G loans, compared to other purposes.
+
+# Final Plots and Summary
+
+### Plot One
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+a1 <- ggplot(loans.2, aes(int_rate, fill = default_status)) + geom_density() +
+  labs(y = "Density", x = "Interest Rate (%)") +
+  ggtitle("Density of Interest Rate by Default Status") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_discrete(name="Default\nStatus")
+  
+
+
+a2 <- ggplot(loans.2, aes(x = default_status, y = int_rate, fill = default_status)) + geom_boxplot() +
+  labs(y = "Interest Rate (%)", x = "Default Status") +
+  ggtitle("Interest Rates by Default Status") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_discrete(name="Default\nStatus")
+
+grid.arrange(a1, a2, ncol = 1)
+
+```
+
+
+### Description One
+
+This bivariate plot shows two plots - a KDE plot and a box plot. While interest rate's correlation with default status isn't very strong, it was the biggest among all of the continuous variables. These two plots clearly show that loans that default have higher interest rates than their paid counter parts. The KDE plot shows the default status further on the right, while the box plot shows that the median interest rate for defaulted loans is > 20%, while < 20% for paid loans.
+
+### Plot Two
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(loans.2, aes(x = default_status, fill = grade)) +
+  geom_bar(position="fill") +
+  scale_y_continuous(labels=percent) +
+  labs(y = "Grade Proportion (%)", x = "Default Status") +
+  ggtitle("Proportion of Grades by Default Status") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_discrete(name="Grade")
+
+```
+
+### Description Two
+
+This bivariate plot shows us the distribution of grades for each default status. Unsurprisingly, we can see that there are significantly less A grades for defaulted loans, alongside a decrease in B grades, and increase for C grade loans and lower.
+
+### Plot Three
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(loans.2, aes(x = purpose, fill = grade)) +
+  geom_bar(position="fill") +
+  facet_wrap(~ default_status) +
+  scale_y_continuous(labels=percent) +
+  coord_flip() +
+  labs(y = "Grade Proportion (%)", x = "Purpose") +
+  ggtitle("Proportion of Grades for Purpose, By Default Status") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_discrete(name="Grade")
+
+```
+
+### Description Three
+
+In this multivariate plot, we can see how the proportion of grades for each purpose changes between default and paid loans. Similar to the previous plot, A & B grades decrease in proportion for default loans but C grades and below increase. What is worth nothing here is where the proportion of A grades and G grades is the highest. Car loans that have been paid off have the highest proportion of A grade loans. Renewable energy loans that defaulted have the highest proportion of G grade loans.
+
+
+# Reflection
+
+This dataset of Lending Club loan data initially had 887,379 variables and 74 variables. The data was cut down to only have 13 variables, and 254,190 observations (only past loans). 9 were continuous, 5 were categorical. I aimed to find out what variables were correlated with default rate, so I made a 14th variable called "Default Status" that indicated whether the past loan defaulted/charged off or was paid off.
+
+For my univariate analysis, I made bar plots to look at the counts of categorical values, and histograms for continuous variables. Four of the five histograms were positively skewed - only debt-to-income ratio had a normal distribution. I had to set an x-limit at the 99th percentile for dti and annual income as their histograms were being affected by their extreme outliers. Also, employee length was factored, in order to get a bar chart that was in the correct numerical order, starting from "n/a" and ending at "10+ years".
+
+When it came to bivariate analysis, I initially made a variable simply titled "default_status_int" that set an integer value for each default status. By doing so, I was able to get a numerical value for the correlation between default status and the other 5 continuous variables. While no variable showed significant correlation with default status, the corr plot showed that interest rate and dti correlated the strongest with default status. KDE plots and box plots that were generated showed that those two variables were indeed the most correlated with default status. For categorical variables, grades significantly dropped in quality between default and paid loans, and the proportion of 60 month term loans experienced a significant jump for default loans.
+
+For my multivariate analysis, I was interested to see how relationships between some variables changed across default and paid loans. Ultimately, I did not gain much insight here - relationships between variables like interest rate and installment were pretty consistent across default status. I also looked at how grade distributions across default status changed if you broke that down further by bringing in a third variable like employment length, term, home ownership and purpose. The only interesting observation I was made that renewable energy related loans that defaulted experience a relatively sharp increase in G rated loans, compared to other default loans.
+
+I do not feel that many of these variables are strongly correlated with default rate. Interest rate and DTI are promising and worth investigating further. 60 month loans appears to have a notable increase among loans that defaulted.  Even though we were able to see some slight differences in the default/paid loan means for annual income and loan amounts, I'm not convinced much weight needs to be put on those variables.
+
+For the future, I would do four things:
+
+  1) I would try to incorporate loan issue date (issue_d) into my analysis, by transform the variable into an integer. By doing so, I could look at the distribution of default/paid off loans over time, and perhaps I could gain some interesting insights.
+  
+  2) Utilize state data (addr_state) and see if there any states in particular that have a disproportionate amount of defaulted loans. 
+  
+  3) Incorporate the 600,000 present-day loans I removed into my analysis, as they might be able to find more variables strongly correlated with default rates.
+  
+  4) Once I feel I have found enough variables that strongly correlate with default status, develop a linear model to predict default rates.
