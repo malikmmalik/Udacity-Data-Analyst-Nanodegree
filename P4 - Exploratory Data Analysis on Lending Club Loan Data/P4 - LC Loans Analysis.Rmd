@@ -1,3 +1,8 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+---
 
 Lending Club Loan Data by Malik Malik
 ========================================================
@@ -217,7 +222,9 @@ There are 207,723 loans that have been paid off, while 46,467 have either defaul
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 
-emp_length_factors <- c("n/a", "< 1 year", "1 year", "2 years", "3 years", "4 years", "5 years", "6 years", "7 years", "8 years", "9 years", "10+ years")
+emp_length_factors <- c("n/a", "< 1 year", "1 year", "2 years", "3 years", 
+                        "4 years", "5 years", "6 years", "7 years", "8 years", 
+                        "9 years", "10+ years")
 
 loans.2$emp_length <- factor(loans.2$emp_length, levels = emp_length_factors)
 
@@ -373,7 +380,7 @@ Once I do this, I'll make a correlation plot. I'll be able to get a numerical va
 
 ### Correlation Plot
 
-```{r echo=TRUE, message=FALSE, warning=FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 
 # Making the variable
 
@@ -408,7 +415,8 @@ Observations:
 a1 <- ggplot(loans.2, aes(int_rate, fill = default_status)) + geom_density()
 
 # Box plot
-a2 <- ggplot(loans.2, aes(x = default_status, y = int_rate, fill = default_status)) + geom_boxplot()
+a2 <- ggplot(loans.2, aes(x = default_status, y = int_rate, 
+                          fill = default_status)) + geom_boxplot()
 
 grid.arrange(a1, a2, ncol = 1)
 
@@ -426,7 +434,8 @@ a1 <- ggplot(loans.2, aes(loan_amnt, fill = default_status)) + geom_density()
 
 # Box plot
 
-a2 <- ggplot(loans.2, aes(x = default_status, y = loan_amnt, fill = default_status)) + geom_boxplot()
+a2 <- ggplot(loans.2, aes(x = default_status, y = loan_amnt, 
+                          fill = default_status)) + geom_boxplot()
 
 grid.arrange(a1, a2, ncol = 1)
 ```
@@ -442,13 +451,14 @@ a1 <- ggplot(loans.2, aes(annual_inc, fill = default_status)) + geom_density() +
   scale_x_continuous(limit = c(0, quantile(loans.2$annual_inc, probs = 0.99)))
 
 #Box plot
-a2 <- ggplot(loans.2, aes(x = default_status, y = annual_inc, fill = default_status)) + geom_boxplot() +
+a2 <- ggplot(loans.2, aes(x = default_status, y = annual_inc, 
+                          fill = default_status)) + geom_boxplot() +
   scale_y_continuous(limit = c(0, quantile(loans.2$annual_inc, probs = 0.99)))
 
 grid.arrange(a1, a2, ncol = 1)
 ```
 
-The mean annual income of borrowers who default is slightly lower than borrowers who pay back their loans.
+As shown by the box plot, the median annual income of borrowers who default is slightly lower than borrowers who pay back their loans.
 
 ### Installment broken down by default_status
 
@@ -459,7 +469,8 @@ The mean annual income of borrowers who default is slightly lower than borrowers
 a1 <- ggplot(loans.2, aes(installment, fill = default_status)) + geom_density()
 
 # Box plot
-a2 <- ggplot(loans.2, aes(x = default_status, y = installment, fill = default_status)) + geom_boxplot()
+a2 <- ggplot(loans.2, aes(x = default_status, y = installment, 
+                          fill = default_status)) + geom_boxplot()
 
 grid.arrange(a1, a2, ncol = 1)
 ```
@@ -692,7 +703,8 @@ a1 <- ggplot(loans.2, aes(int_rate, fill = default_status)) + geom_density() +
   
 
 
-a2 <- ggplot(loans.2, aes(x = default_status, y = int_rate, fill = default_status)) + geom_boxplot() +
+a2 <- ggplot(loans.2, aes(x = default_status, y = int_rate, 
+                          fill = default_status)) + geom_boxplot() +
   labs(y = "Interest Rate (%)", x = "Default Status") +
   ggtitle("Interest Rates by Default Status") +
   theme(plot.title = element_text(hjust = 0.5)) +
@@ -764,6 +776,6 @@ For the future, I would do four things:
   
   2) Utilize state data (addr_state) and see if there any states in particular that have a disproportionate amount of defaulted loans. 
   
-  3) Incorporate the 600,000 present-day loans I removed into my analysis, as they might be able to find more variables strongly correlated with default rates.
+  3) Incorporate the 600,000 present-day loans I removed into my analysis, as they might be able to help me find more variables strongly correlated with default rates.
   
   4) Once I feel I have found enough variables that strongly correlate with default status, develop a linear model to predict default rates.
